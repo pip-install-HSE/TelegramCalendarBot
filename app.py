@@ -3,7 +3,8 @@ import os
 
 from aiogram import executor
 import logging
-from load_all import bot
+from bot.load_all import bot
+from database import test
 
 
 
@@ -16,5 +17,8 @@ async def on_startup(dp):
 
 
 if __name__ == '__main__':
-    from handlers import dp
+    from bot.handlers import dp
+    from database import table_generation
+    #table_generation.generate()
+    logging.info(test.lol)
     executor.start_polling(dp, on_shutdown=on_shutdown, on_startup=on_startup, skip_updates=True)

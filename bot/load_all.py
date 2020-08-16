@@ -5,7 +5,7 @@ from aiogram import Bot
 from aiogram import Dispatcher
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 
-from config import TOKEN
+from bot.config import TOKEN
 
 
 

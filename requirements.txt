@@ -1,5 +1,5 @@
 python-dotenv==0.13.0
 aiogram
-
+psycopg2
 
 
