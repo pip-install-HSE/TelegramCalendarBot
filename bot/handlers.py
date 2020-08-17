@@ -1,4 +1,6 @@
 import logging
+import os
+import pickle
 
 from aiogram import types
 from aiogram.dispatcher import FSMContext
@@ -15,11 +17,11 @@ from datetime import timedelta
 
 from bot.edit_or_send_message import edit_or_send_message
 from database.functions import create_user
+from googleapiclient.discovery import build
 
 
 @dp.message_handler(commands=['start'], state='*')
 async def start(message: types.Message):
-    # Если пользователь новый то создаёт его в базе данных
     text = f"Здраствуйте! {message.from_user.first_name}\n"
     text += await texts.menu(bot)
 
@@ -34,7 +36,6 @@ async def entry(message: types.Message):
 
 @dp.message_handler(state=UserState.name)
 async def set_name(message: types.Message, state: FSMContext):
-    # Вариант 1 сохранения переменных - записываем через key=var
     await state.update_data(
         {"name": message.text}
     )
@@ -48,28 +49,12 @@ async def start_(message: types.Message, state: FSMContext):
     await state.update_data(
         {"phone": message.text}
     )
-    data = await state.get_data()
-    logging.info(f"{data['name']} {data['phone']}")
+
     callback = types.CallbackQuery()
     callback.data, callback.message = None, message
     await month_keyboard(callback, state)
     await UserState.month.set()
 
-    # await edit_or_send_message(bot, message, text="Выберите месяц", kb=keyboards.month, disable_web=True)
-    # await UserState.month.set()
-
-
-# @dp.message_handler(Text(equals=['Декабрь', 'Январь', 'Февраль',
-#                                  'Март', 'Апрель', 'Май',
-#                                  'Июнь', 'Июль', 'Август',
-#                                  'Сентябрь', 'Октябрь', 'Ноябрь']), state=UserState.month)
-# async def start_(message: types.Message, state: FSMContext):
-#     await state.update_data(
-#         {"month": message.text}
-#     )
-#
-#     await edit_or_send_message(bot, message, text="Выберите день", disable_web=True)
-#     await UserState.month.set()
 
 @dp.callback_query_handler(state=UserState.month)
 async def month_keyboard(callback: types.CallbackQuery, state: FSMContext):
@@ -98,27 +83,58 @@ async def month_keyboard(callback: types.CallbackQuery, state: FSMContext):
 async def day_keyboard(callback: types.CallbackQuery, state: FSMContext):
     day = int(re.findall(r"set_day (\d\d)", callback.data)[0])
     await state.update_data({"day": day})
-    await callback.message.edit_text(text="Выберите время", reply_markup=None)
-    await UserState.time.set()
+    creds = None
+    if os.path.exists('token.pickle'):
+        with open('token.pickle', 'rb') as token:
+            creds = pickle.load(token)
+    service = build('calendar', 'v3', credentials=creds)
+    # Call the Calendar API
+    data = await state.get_data()
+    day_int, month_int, year = data['day'], data['month'], data['year']
+    day_now, month_now, year_now = data['day'], data['month'], data[
+        'year'] = datetime.now().day, datetime.now().month, datetime.now().year
+    if day_int == day_now and month_int == month_now and year == year_now:
+        hour = datetime.now().hour
+        minute = datetime.now().minute
+        now = datetime(day=day_int, month=month_int, year=year, hour=hour, minute=minute).isoformat() + 'Z'
+    else:
+        now = datetime(day=day_int, month=month_int, year=year).isoformat() + 'Z'
+    not_now = (datetime(day=day_int, month=month_int, year=year) + timedelta(
+        days=1)).isoformat() + 'Z'
+
+    events_result = service.events().list(calendarId='primary', timeMin=now, timeMax=not_now,
+                                          maxResults=100, singleEvents=True,
+                                          orderBy='startTime').execute()
+    events = events_result.get('items', [])
+    keyboard_time = keyboards.time(events)
+    if keyboard_time == None:
+        logging.info("II III III II ")
+        await UserState.month.set()
+        await callback.message.edit_text(
+            text='"Свободного времени на выбранную дату нет, пожалуйста, попробуйте другую дату."',
+            reply_markup=keyboards.month(month_now, year_now))
+    else:
+        await callback.message.edit_text(text='Выберите время', reply_markup=keyboard_time)
+        await UserState.time.set()
 
 
+@dp.callback_query_handler(state=UserState.time)
+async def time(callback: types.CallbackQuery, state: FSMContext):
+    event_id = callback.data
+    logging.info(event_id)
+    creds = None
+    if os.path.exists('token.pickle'):
+        with open('token.pickle', 'rb') as token:
+            creds = pickle.load(token)
+    service = build('calendar', 'v3', credentials=creds)
+    event = service.events().get(calendarId='primary', eventId=event_id).execute()
+    data = await state.get_data()
+    text_to_desc = f"{data['name']} {data['phone']}"
+    event['description'] = f"{event['description']}\n{text_to_desc}" if 'description' in event.keys() else text_to_desc
+    updated_event = service.events().update(calendarId='primary', eventId=event['id'], body=event).execute()
+    await callback.message.edit_text(text="Спасибо за регистрацию! Для новой записи нажмите: /start", reply_markup=None)
 
-    # await edit_or_send_message(bot, message, text="Выберите день", disable_web=True)
-    # await UserState.month.set()
 
-
-
-# @dp.message_handler(commands=['start'], state='*')
-# async def start_(message: types.Message):
-#     user, is_created_now =
-#     text = ""
-#     # Если пользователь новый то создаёт его в базе данных
-#     if is_created_now:
-#         user.username = message.from_user.username
-#         user.full_name = message.from_user.full_name
-#         user.save()
-#         text += f"Здраствуйте! {user.full_name}\n"
-#     else:
-#         text += f"С возвращением! {user.full_name}\n"
-#     text += await texts.menu(user, bot)
-#     await edit_or_send_message(bot, message, text=text, kb=keyboards.menu, disable_web=True)
+@dp.message_handler(state="*")
+async def text(message: types.Message, state: FSMContext):
+    await message.delete()

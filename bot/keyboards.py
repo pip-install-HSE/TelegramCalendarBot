@@ -1,4 +1,5 @@
 import calendar
+import re
 
 from bot.modules.keyboard import KeyboardInline, KeyboardReply
 from aiogram import types
@@ -89,8 +90,7 @@ keyboard v 1.0
 
 menu = KeyboardReply([["Запись", "О нас"],
                     {"Наш адрес", "Полезная информация"}]).get()
-# menu = KeyboardReply([{"\ud83d\udcc5 Запись", "\ud83d\udcfd О нас"},
-#                        {"\ud83d\udccd Наш адрес", "\ud83d\udcd8 Полезная информация"}]).get()
+
 
 matches = KeyboardInline([{"<-": "prev", "->": "next"},
                           {"Меню": "menu"}]).get()
@@ -98,41 +98,34 @@ matches = KeyboardInline([{"<-": "prev", "->": "next"},
 back = KeyboardInline([{"Меню": "menu"}]).get()
 
 
-async def info(bot, team_id):
-    teams = []
-    tmp = {}
-    for i, team in enumerate(teams_db[team_id:][:9]):
-        tmp.update({team.name: f"team:{team.id}"})
-        if (i+1) % 3 == 0:
-            teams.append(tmp)
-            tmp = {}
-    teams.append({"<-": "team:prev", "->": "team:next"})
-    teams.append({"Меню": "menu"})
-    return KeyboardInline(teams).get()
 
 
 def month(month, year):
     locale.setlocale(locale.LC_ALL, "ru")
-
     today = datetime.today()
     current = datetime.today().replace(day=1, month=month, year=year)
     next = current + timedelta(days=31)
     prev = current - timedelta(days=1)
-
     month_str = current.strftime("%B")
-
-    scroll_text = [f"{month_str} {current.year}"] + [">>"]
-    scroll_callback = [f"choose_month {current.strftime('%m.%Y')}"] + [f"set_month {next.strftime('%m.%Y')}"]
+    month_text=[f"{month_str} {current.year}"]
+    scroll_text = [">>"]
+    month_callback = [f"choose_month {current.strftime('%m.%Y')}"]
+    scroll_callback = [f"set_month {next.strftime('%m.%Y')}"]
     if current.year > today.year or (current.year == today.year and current.month > today.month):
         scroll_text = ["<<"] + scroll_text
-        scroll_callback = [f"set_month {prev.strftime('%m.%Y')}"] + scroll_callback
+        logging.info(scroll_text)
+        month_callback=[f"choose_month {current.strftime('%m.%Y')}"]
+        scroll_callback = [f"set_month {prev.strftime('%m.%Y')}"]+scroll_callback
 
+    logging.info(scroll_text)
     return inline(
         [
+            month_text,
             scroll_text,
             ["Выбрать"]
         ],
         [
+            month_callback,
             scroll_callback,
             [f"choose_month {current.strftime('%m.%Y')}"]
         ]
@@ -141,10 +134,7 @@ def month(month, year):
 def day(month, year):
     today = datetime.today()
     current = datetime.today().replace(day=1, month=month, year=year)
-
     first_day = 1
-    # next = current
-    # while next
     count = calendar.mdays[current.month]
     logging.info(f"Days in month: {count}")
     if current.month == today.month and current.year == today.year:
@@ -158,9 +148,25 @@ def day(month, year):
         if (day - first_day) % count_in_row == 0:
             keyboard.append([])
         keyboard[-1].append(day)
-
     callback = [[f"set_day {button//10}{button%10}" for button in row] for row in keyboard]
     return inline(keyboard, callback)
 
-
+def time(events):
+    keyboard = []
+    callback = []
+    for event in events:
+        start = event['start'].get('dateTime', event['start'].get('date'))
+        start = re.findall(r"\d\d\d\d-\d\d-\d\dT(\d\d:\d\d):\d\d\+\d\d:\d\d", start)[0]
+        end = event['end'].get('dateTime', event['end'].get('date'))
+        end = re.findall(r"\d\d\d\d-\d\d-\d\dT(\d\d:\d\d):\d\d\+\d\d:\d\d", end)[0]
+        try:
+            if(event['description']==None):
+                keyboard.append([f"{start}-{end}"])
+                callback.append([event['id']])
+        except:
+            keyboard.append([f"{start}-{end}"])
+            callback.append([event['id']])
+    if (keyboard==[]):
+        return None
+    return inline(keyboard,callback)
 

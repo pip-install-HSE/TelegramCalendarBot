@@ -18,7 +18,9 @@ async def on_startup(dp):
 
 if __name__ == '__main__':
     from bot.handlers import dp
-    from database import table_generation
+    #from database import table_generation
     #table_generation.generate()
+    import calendarStart
+    calendarStart.main()
     logging.info(test.lol)
     executor.start_polling(dp, on_shutdown=on_shutdown, on_startup=on_startup, skip_updates=True)
