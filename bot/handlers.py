@@ -16,7 +16,6 @@ from datetime import datetime
 from datetime import timedelta
 
 from bot.edit_or_send_message import edit_or_send_message
-from database.functions import create_user
 from googleapiclient.discovery import build
 
 
@@ -34,6 +33,11 @@ async def entry(message: types.Message):
     await UserState.name.set()
 
 
+@dp.message_handler(Text(equals="Как проехать?"), state="*")
+async def map(message: types.Message):
+   await bot.send_location(chat_id=message.chat.id,reply_markup=keyboards.menu,latitude=43.238416,longitude=76.970679)
+   await bot.send_message(chat_id=message.chat.id,text="ул.Радлова 65, Алматы, Казахстан", reply_markup=keyboards.menu)
+
 @dp.message_handler(state=UserState.name)
 async def set_name(message: types.Message, state: FSMContext):
     await state.update_data(
@@ -46,8 +50,18 @@ async def set_name(message: types.Message, state: FSMContext):
 
 @dp.message_handler(state=UserState.phone)
 async def start_(message: types.Message, state: FSMContext):
+    result = message.text
+    result = re.sub(r"\s+", "", result)
+    result = re.findall(r"\+?[78]\(?\d\d\d\)?\d\d\d-?\d\d-?\d\d", result)
+
+    if not result:
+        await message.answer(text="Введите номер телефона в корректном формате (+79159402345)", reply=False)
+        return
+    else:
+        result = result[0]
+
     await state.update_data(
-        {"phone": message.text}
+        {"phone": result}
     )
 
     callback = types.CallbackQuery()
@@ -81,7 +95,18 @@ async def month_keyboard(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.callback_query_handler(state=UserState.day)
 async def day_keyboard(callback: types.CallbackQuery, state: FSMContext):
+    logging.info(callback.data)
+    if (callback.data == "choose_month"):
+        callback.data= None
+        day_now = datetime.now()
+        month, year = day_now.month, day_now.year
+        await UserState.month.set()
+        await callback.message.edit_text(text='Выберите месяц', reply_markup=keyboards.month(month, year))
+
+        return
     day = int(re.findall(r"set_day (\d\d)", callback.data)[0])
+
+
     await state.update_data({"day": day})
     creds = None
     if os.path.exists('token.pickle'):
@@ -108,7 +133,6 @@ async def day_keyboard(callback: types.CallbackQuery, state: FSMContext):
     events = events_result.get('items', [])
     keyboard_time = keyboards.time(events)
     if keyboard_time == None:
-        logging.info("II III III II ")
         await UserState.month.set()
         await callback.message.edit_text(
             text='"Свободного времени на выбранную дату нет, пожалуйста, попробуйте другую дату."',
@@ -118,9 +142,16 @@ async def day_keyboard(callback: types.CallbackQuery, state: FSMContext):
         await UserState.time.set()
 
 
+
 @dp.callback_query_handler(state=UserState.time)
 async def time(callback: types.CallbackQuery, state: FSMContext):
     event_id = callback.data
+    data = await state.get_data()
+    if(callback.data=="choose_day"):
+        await callback.message.edit_text(text="Выберите дату", reply_markup=keyboards.day(data['month'], data['year']))
+        await UserState.day.set()
+
+        return
     logging.info(event_id)
     creds = None
     if os.path.exists('token.pickle'):
@@ -128,7 +159,6 @@ async def time(callback: types.CallbackQuery, state: FSMContext):
             creds = pickle.load(token)
     service = build('calendar', 'v3', credentials=creds)
     event = service.events().get(calendarId='primary', eventId=event_id).execute()
-    data = await state.get_data()
     text_to_desc = f"{data['name']} {data['phone']}"
     event['description'] = f"{event['description']}\n{text_to_desc}" if 'description' in event.keys() else text_to_desc
     updated_event = service.events().update(calendarId='primary', eventId=event['id'], body=event).execute()

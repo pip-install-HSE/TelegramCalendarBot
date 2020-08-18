@@ -88,8 +88,8 @@ keyboard v 1.0
 :List of :Dicts where first is :Str name, last is :Str callback.
 """
 
-menu = KeyboardReply([["Запись", "О нас"],
-                    {"Наш адрес", "Полезная информация"}]).get()
+menu = KeyboardReply([["Запись", "Студия"],
+                    ["Как проехать?", "Прайс-лист"]]).get()
 
 
 matches = KeyboardInline([{"<-": "prev", "->": "next"},
@@ -101,12 +101,14 @@ back = KeyboardInline([{"Меню": "menu"}]).get()
 
 
 def month(month, year):
-    locale.setlocale(locale.LC_ALL, "ru")
+    #locale.setlocale(locale.LC_ALL, "ru")
+    month_array = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь','Декабрь']
     today = datetime.today()
     current = datetime.today().replace(day=1, month=month, year=year)
     next = current + timedelta(days=31)
     prev = current - timedelta(days=1)
-    month_str = current.strftime("%B")
+   # month_str = current.strftime("%B")
+    month_str=month_array[current.month-1]
     month_text=[f"{month_str} {current.year}"]
     scroll_text = [">>"]
     month_callback = [f"choose_month {current.strftime('%m.%Y')}"]
@@ -149,7 +151,10 @@ def day(month, year):
             keyboard.append([])
         keyboard[-1].append(day)
     callback = [[f"set_day {button//10}{button%10}" for button in row] for row in keyboard]
-    return inline(keyboard, callback)
+    return inline(
+            keyboard+["Вернуться к выбору месяца"],
+            callback+ ["choose_month"]
+        )
 
 def time(events):
     keyboard = []
@@ -168,5 +173,9 @@ def time(events):
             callback.append([event['id']])
     if (keyboard==[]):
         return None
-    return inline(keyboard,callback)
+
+    return inline(
+            keyboard+["Вернуться к выбору дня"],
+            callback+ ["choose_day"]
+        )
 

@@ -1,17 +1,17 @@
 version: '3.1'
 
 services:
-  db:
-    container_name: database
-    image: postgres
-    restart: always
-    ports:
-      - 5432:5432
-    environment:
-      POSTGRES_PASSWORD: example
-    #network_mode: "host"
-#    env_file:
-#      - ".env"
+#  db:
+#    container_name: database
+#    image: postgres
+#    restart: always
+#    ports:
+#      - 5432:5432
+#    environment:
+#      POSTGRES_PASSWORD: example
+#    #network_mode: "host"
+##    env_file:
+##      - ".env"
 
   tgbot:
     container_name: bot
